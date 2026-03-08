@@ -5,3 +5,8 @@ __pycache__/
 *.log
 *.out
 *.synctex.gz
+jobs.db
+logs/
+postings_freq.png
+stream_state.json
+resume/

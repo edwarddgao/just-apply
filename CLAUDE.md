@@ -7,10 +7,10 @@ Automated job application system. Python orchestrator spawns `claude -p` agents 
 ```
 pipeline.py (Python)          claude -p --chrome (per job)
 ┌─────────────────────┐       ┌─────────────────────┐
-│ find_candidates()   │       │ apply-to-job skill   │
+│ find_candidates()   │       │ agent_prompt.txt     │
 │ resolve_urls()      │──────>│ Simplify autofill    │
 │ mark_applied()      │<──────│ Chrome MCP tools     │
-│ mark_blocked()      │       │ stream-json log      │
+│ mark_excluded()     │       │ stream-json log      │
 └─────────────────────┘       └─────────────────────┘
         x4 concurrent workers, each with a fixed tab ID
 ```
@@ -27,12 +27,12 @@ If run from inside Claude Code, prefix with `env -u CLAUDECODE` to bypass nestin
 ## Files
 
 - `pipeline.py` — orchestrator: fetches jobs, resolves URLs, spawns agents, marks results
-- `search.py` — `find_candidates()` (queries `candidates` table), `mark_applied()`, `mark_blocked()`
+- `search.py` — `find_candidates()` (queries `candidates` table), `mark_applied()`, `mark_excluded()`, `delete_job()`
 - `sync.py` — syncs Simplify.jobs Typesense → `jobs.db`, rebuilds `candidates` table
 - `simplify.py` — Typesense API client (used by sync only)
 - `jobs.db` — SQLite mirror (864k+ jobs), `candidates` table (pre-filtered ~8.7k rows)
 - `logs/` — per-job stream-json logs for debugging (`logs/{posting_id}.jsonl`)
-- `.claude/skills/apply-to-job/SKILL.md` — agent skill (workflow, known gaps, reporting)
+- `agent_prompt.txt` — system prompt for pipeline agents (resume, workflow, known gaps)
 
 ## Candidate
 
@@ -51,7 +51,7 @@ Pre-filtered from `jobs` table by location, experience, function, title. Rebuilt
 - Functions: SWE, Backend, Frontend, ML, Data, DevOps, etc.
 - Salary: ≤ $300k
 - Title exclusion: no senior, staff, principal, lead, director, manager
-- Dedup: excludes posting_ids in `applications` or `blocked` tables
+- Dedup: excludes posting_ids in `applications` or `exclusions` tables
 
 ### Syncing
 - Full: `python sync.py --full` (~30 min)
@@ -61,9 +61,14 @@ Pre-filtered from `jobs` table by location, experience, function, title. Rebuilt
 ## Tracking
 
 - **SUBMITTED / ALREADY_APPLIED** → `mark_applied(posting_id)`
-- **BLOCKED** → `mark_blocked(posting_id, reason, company, title, url)`
+- **BLOCKED / TIMEOUT** → `mark_excluded(posting_id, reason, ...)` — goes to manual apply queue
+- **Dead posting (404)** → `delete_job(posting_id)` — removed from all tables
 - **ERROR** → stays in pool for retry (not recorded)
-- `list_blocked()` returns blocked jobs for manual application
+
+### `exclusions` table
+Two block types:
+- `platform` — can't automate (wrong ATS, timeout, complex portal). Surfaces in manual apply queue.
+- `skipped` — user passed during manual apply. Never shown again.
 
 ## Pipeline Details
 
@@ -80,7 +85,7 @@ Pre-filtered from `jobs` table by location, experience, function, title. Rebuilt
 - Per-job timeout: 600s
 - Worker exceptions caught
 - DB is the only state — just restart the script to resume
-- Unresolvable URLs marked blocked immediately
+- Unresolvable URLs excluded immediately (manual apply queue)
 
 ### Allowed ATS platforms
 Defined in `pipeline.py` as `ALLOWED_DOMAINS`: lever.co, greenhouse.io, ashbyhq.com
@@ -92,7 +97,7 @@ Navigate tab {TAB_ID} to {URL}. Company: {NAME} | Role: {TITLE}
 
 ## Skill Maintenance
 
-After reviewing agent logs in `logs/`, update `.claude/skills/apply-to-job/SKILL.md`:
+After reviewing agent logs in `logs/`, update `agent_prompt.txt`:
 1. Add cross-platform observations to Known Gaps
 2. Remove outdated gaps
 3. Update Known Answers with new Q&A pairs

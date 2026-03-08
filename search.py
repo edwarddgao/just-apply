@@ -11,6 +11,13 @@ import httpx
 
 DB_PATH = Path(__file__).parent / "jobs.db"
 
+# Shared with rebuild_candidates() in sync.py
+TITLE_EXCLUSIONS = ["senior", "staff", "principal", "lead ", "director", "manager"]
+# Additional non-SWE exclusions for manual queue
+MANUAL_TITLE_EXCLUSIONS = TITLE_EXCLUSIONS + [
+    "technician", "support", "help desk", "service desk", "installer", "operator",
+]
+
 def find_candidates(limit: int = 100) -> list[dict]:
     """Return unapplied jobs ranked by capped salary DESC.
 
@@ -24,10 +31,12 @@ def find_candidates(limit: int = 100) -> list[dict]:
         SELECT c.*
         FROM candidates c
         LEFT JOIN applications a ON c.posting_id = a.posting_id
-        LEFT JOIN blocked b ON c.posting_id = b.posting_id
+        LEFT JOIN exclusions e ON c.posting_id = e.posting_id
         WHERE a.posting_id IS NULL
-          AND b.posting_id IS NULL
-        ORDER BY COALESCE(c.max_salary, 0) DESC
+          AND e.posting_id IS NULL
+        ORDER BY
+          (c.rating_competitive_edge + c.rating_growth_potential + c.rating_differentiation) DESC,
+          COALESCE(c.funding_total, 0) DESC
         LIMIT ?
         """,
         (limit,),
@@ -96,31 +105,80 @@ def mark_applied(posting_id: str) -> None:
     conn.close()
 
 
-def mark_blocked(posting_id: str, reason: str, company: str = "", title: str = "", url: str = "") -> None:
+def mark_excluded(posting_id: str, reason: str, company: str = "", title: str = "", url: str = "", block_type: str = "platform") -> None:
     """Record a job that can't be automated. Excluded from future batches."""
     conn = sqlite3.connect(DB_PATH)
     conn.execute(
-        "INSERT OR REPLACE INTO blocked (posting_id, reason, company, title, url, blocked_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
-        (posting_id, reason, company, title, url),
+        "INSERT OR REPLACE INTO exclusions (posting_id, reason, company, title, url, excluded_at, block_type) VALUES (?, ?, ?, ?, ?, datetime('now'), ?)",
+        (posting_id, reason, company, title, url, block_type),
     )
     conn.commit()
     conn.close()
 
 
-def list_blocked() -> list[dict]:
-    """Return all blocked jobs for manual application."""
+def delete_job(posting_id: str) -> None:
+    """Remove a dead/invalid job from all tables."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("DELETE FROM jobs WHERE posting_id = ?", (posting_id,))
+    conn.execute("DELETE FROM candidates WHERE posting_id = ?", (posting_id,))
+    conn.execute("DELETE FROM exclusions WHERE posting_id = ?", (posting_id,))
+    conn.execute("DELETE FROM applications WHERE posting_id = ?", (posting_id,))
+    conn.commit()
+    conn.close()
+
+
+def list_excluded() -> list[dict]:
+    """Return all excluded jobs."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    rows = conn.execute("SELECT * FROM blocked ORDER BY blocked_at DESC").fetchall()
+    rows = conn.execute("SELECT * FROM exclusions ORDER BY excluded_at DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def find_manual_candidates(limit: int = 50) -> list[dict]:
+    """Return platform-blocked jobs sorted by company rating for manual application.
+
+    Applies the same title filters as rebuild_candidates() to exclude
+    non-SWE roles (technicians, support, etc.).
+    """
+    title_filter = " ".join(f"AND LOWER(e.title) NOT LIKE '%{t}%'" for t in MANUAL_TITLE_EXCLUSIONS)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(f"""
+        SELECT e.posting_id, e.company, e.title, e.url, e.reason,
+               COALESCE(co.rating_competitive_edge, 0) +
+               COALESCE(co.rating_growth_potential, 0) +
+               COALESCE(co.rating_differentiation, 0) as score,
+               COALESCE(co.funding_total, 0) as funding_total
+        FROM exclusions e
+        JOIN jobs j ON e.posting_id = j.posting_id
+        LEFT JOIN companies co ON j.company_id = co.company_id
+        LEFT JOIN applications a ON e.posting_id = a.posting_id
+        WHERE e.block_type = 'platform'
+          AND a.posting_id IS NULL
+          {title_filter}
+        ORDER BY score DESC, funding_total DESC
+        LIMIT ?
+    """, (limit,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
 if __name__ == "__main__":
-    candidates = find_candidates(limit=20)
-    print(f"Candidates: {len(candidates)}")
-    print()
-    for i, c in enumerate(candidates, 1):
-        sal = f"${int(c['max_salary']/1000)}k" if c["max_salary"] else ""
-        locs = ", ".join(c["locations"][:2])
-        print(f"{i:>3}. {c['company']:<28} {c['title'][:45]:<45} {sal:>6}  {locs}")
+    import sys
+
+    if "--manual" in sys.argv:
+        manual = find_manual_candidates(limit=50)
+        print(f"Manual apply queue: {len(manual)} jobs\n")
+        for i, m in enumerate(manual, 1):
+            print(f"{i:>3}. [{m['score']:>2}] {m['company']:<28} {m['title'][:45]:<45}")
+            print(f"      {m['url']}")
+    else:
+        candidates = find_candidates(limit=20)
+        print(f"Candidates: {len(candidates)}")
+        print()
+        for i, c in enumerate(candidates, 1):
+            sal = f"${int(c['max_salary']/1000)}k" if c["max_salary"] else ""
+            locs = ", ".join(c["locations"][:2])
+            print(f"{i:>3}. {c['company']:<28} {c['title'][:45]:<45} {sal:>6}  {locs}")

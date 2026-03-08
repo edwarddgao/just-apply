@@ -12,14 +12,13 @@ import argparse
 import asyncio
 import json
 import os
-import re
 import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-from search import find_candidates, resolve_urls, mark_applied, mark_blocked
+from search import find_candidates, resolve_urls, mark_applied, mark_excluded, delete_job
 
 LOGS_DIR = Path(__file__).parent / "logs"
 PIPELINE_LOG = LOGS_DIR / "pipeline.log"
@@ -105,27 +104,34 @@ def close_extra_tabs() -> None:
     )
 
 
+TAB_SCHEMA = json.dumps({
+    "type": "object",
+    "properties": {"tab_ids": {"type": "array", "items": {"type": "integer"}}},
+    "required": ["tab_ids"],
+})
+
+
 def create_tabs(n: int) -> list[int]:
     """One-shot claude -p to create browser tabs."""
     prompt = (
         f"Call tabs_context_mcp with createIfEmpty=true. "
         f"Then call tabs_create_mcp {n - 1} more times (one at a time). "
-        f"Return ONLY a JSON array of all {n} tab IDs. Example: [111, 222, 333]"
+        f"Return all {n} tab IDs."
     )
     result = subprocess.run(
         ["claude", "-p", prompt,
          "--chrome", "--output-format", "json",
+         "--json-schema", TAB_SCHEMA,
          "--max-turns", "15", "--dangerously-skip-permissions"],
         capture_output=True, text=True, env=CHILD_ENV, timeout=60,
     )
     try:
         data = json.loads(result.stdout)
-        text = data.get("result", "") or ""
-        match = re.search(r"\[[\d,\s]+\]", text)
-        if match:
-            tab_ids = json.loads(match.group())
-            log(f"create_tabs: agent returned {tab_ids}")
-            return tab_ids
+        tab_ids = data.get("structured_output", {}).get("tab_ids", [])
+        unique_ids = list(dict.fromkeys(tab_ids))
+        if unique_ids:
+            log(f"create_tabs: {unique_ids}")
+            return unique_ids
     except (json.JSONDecodeError, TypeError):
         pass
     log(f"FATAL: Failed to create tabs.\nstdout: {result.stdout[:500]}\nstderr: {result.stderr[:500]}")
@@ -197,17 +203,21 @@ async def worker(
         except Exception as e:
             status, reason, job_cost = "error", str(e), 0.0
 
-        results[status] = results.get(status, 0) + 1
+        # Extension disconnect = Chrome crashed, treat as error
+        if status == "blocked" and "extension" in reason.lower():
+            status = "error"
+
         cost[0] += job_cost
 
         if status in ("submitted", "already_applied"):
             mark_applied(job["posting_id"])
-        elif status == "blocked":
-            mark_blocked(job["posting_id"], reason, job["company"], job["title"], job["url"])
-        elif status == "timeout":
-            mark_blocked(job["posting_id"], reason, job["company"], job["title"], job["url"])
+            results[status] = results.get(status, 0) + 1
+        elif status in ("blocked", "timeout"):
+            mark_excluded(job["posting_id"], reason, job["company"], job["title"], job["url"])
+            results["excluded"] += 1
         elif status == "error":
             recent_errors.append(time.time())
+            results["error"] += 1
 
         # 3+ errors within 60s = Chrome likely crashed
         cutoff = time.time() - 60
@@ -239,7 +249,7 @@ async def main() -> None:
     tab_ids = create_tabs(args.concurrency)
     log(f"Tabs: {tab_ids}")
 
-    results: dict = {"submitted": 0, "already_applied": 0, "blocked": 0, "error": 0, "timeout": 0}
+    results: dict = {"submitted": 0, "already_applied": 0, "excluded": 0, "deleted": 0, "error": 0}
     cost = [0.0]
     recent_errors: list[float] = []
     stop_event = asyncio.Event()
@@ -266,23 +276,22 @@ async def main() -> None:
             resolved_ids = {r["posting_id"] for r in resolved_batch}
             for c in candidates:
                 if c["posting_id"] not in resolved_ids:
-                    mark_blocked(c["posting_id"], "URL resolution failed",
-                                 c["company"], c["title"], "")
-                    results["blocked"] += 1
+                    mark_excluded(c["posting_id"], "URL resolution failed",
+                                  c["company"], c["title"], "")
+                    results["excluded"] += 1
 
             for resolved in resolved_batch:
                 if "_dead" in resolved:
-                    mark_blocked(resolved["posting_id"], resolved["_dead"],
-                                 resolved["company"], resolved["title"], resolved["url"])
-                    results["blocked"] += 1
+                    delete_job(resolved["posting_id"])
+                    results["deleted"] += 1
                     log(f"  x Dead posting: {resolved['company']} - {resolved['title']} ({resolved['_dead']})")
                     continue
 
                 block_reason = is_blocked(resolved["url"])
                 if block_reason:
-                    mark_blocked(resolved["posting_id"], block_reason,
-                                 resolved["company"], resolved["title"], resolved["url"])
-                    results["blocked"] += 1
+                    mark_excluded(resolved["posting_id"], block_reason,
+                                  resolved["company"], resolved["title"], resolved["url"])
+                    results["excluded"] += 1
                     log(f"  x Pre-blocked: {resolved['company']} - {resolved['title']}")
                     continue
 
@@ -319,6 +328,11 @@ async def main() -> None:
         await asyncio.gather(*workers)
 
         log(f"\n--- Progress: {json.dumps(results)}, cost=${cost[0]:.2f} ---")
+
+        # Reset tabs between batches to clean up stale tabs
+        close_extra_tabs()
+        tab_ids = create_tabs(args.concurrency)
+        log(f"Fresh tabs: {tab_ids}")
 
         if stop_event.is_set():
             try:
