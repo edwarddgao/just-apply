@@ -265,7 +265,8 @@ async def main() -> None:
         fetched = 0
 
         no_more_candidates = False
-        while job_queue.qsize() < args.concurrency * 5:
+        batch_cap = max(20, args.concurrency * 5)
+        while job_queue.qsize() < batch_cap:
             candidates = find_candidates(limit=10)
             if not candidates:
                 no_more_candidates = True
@@ -305,7 +306,7 @@ async def main() -> None:
                 job_queue.put_nowait(resolved)
                 fetched += 1
 
-            if fetched >= args.concurrency * 3:
+            if fetched >= batch_cap:
                 break
 
         if job_queue.empty():

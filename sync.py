@@ -11,7 +11,7 @@ from pathlib import Path
 import httpx
 
 from simplify import TYPESENSE_API_KEY, TYPESENSE_COLLECTION, TYPESENSE_SEARCH
-from search import TITLE_EXCLUSIONS
+from search import TITLE_EXCLUSIONS, COMPANY_EXCLUSIONS
 
 DB_PATH = Path(__file__).parent / "jobs.db"
 BATCH_SIZE = 250
@@ -307,6 +307,7 @@ def rebuild_candidates() -> None:
     """Rebuild the materialized candidates table used by find_candidates()."""
     conn = sqlite3.connect(DB_PATH)
     title_filter = " ".join(f"AND LOWER(j.title) NOT LIKE '%{t}%'" for t in TITLE_EXCLUSIONS)
+    company_filter = " ".join(f"AND LOWER(j.company_name) NOT LIKE '%{c}%'" for c in COMPANY_EXCLUSIONS)
     conn.execute("DROP TABLE IF EXISTS candidates_new")
     conn.execute(f"""
         CREATE TABLE candidates_new AS
@@ -339,6 +340,7 @@ def rebuild_candidates() -> None:
           AND (j.max_salary IS NULL OR j.max_salary <= 300000)
           AND j.salary_period <> '1'
           {title_filter}
+          {company_filter}
     """)
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_candidates_new_pid ON candidates_new(posting_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_candidates_new_salary ON candidates_new(max_salary)")
@@ -354,11 +356,7 @@ async def check_liveness() -> None:
     """Remove jobs/candidates/exclusions entries whose postings are no longer in Typesense."""
     conn = sqlite3.connect(DB_PATH)
 
-    candidate_ids = [r[0] for r in conn.execute("SELECT posting_id FROM candidates").fetchall()]
-    excluded_ids = [r[0] for r in conn.execute(
-        "SELECT posting_id FROM exclusions"
-    ).fetchall()]
-    all_ids = list(set(candidate_ids + excluded_ids))
+    all_ids = [r[0] for r in conn.execute("SELECT posting_id FROM candidates").fetchall()]
 
     if not all_ids:
         print("Liveness check: no posting_ids to check")
@@ -407,7 +405,6 @@ async def check_liveness() -> None:
         dead_tuples = [(pid,) for pid in dead_ids]
         conn.executemany("DELETE FROM jobs WHERE posting_id = ?", dead_tuples)
         conn.executemany("DELETE FROM candidates WHERE posting_id = ?", dead_tuples)
-        conn.executemany("DELETE FROM exclusions WHERE posting_id = ?", dead_tuples)
         conn.commit()
 
     conn.close()

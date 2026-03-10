@@ -2,7 +2,7 @@
 name: apply-manual
 description: Open top-rated manual-apply jobs in Chrome tabs. User applies manually, then Claude marks results.
 user-invocable: true
-arguments: "[count] - number of jobs to open (default 10)"
+arguments: "count - number of jobs to open, default 10"
 ---
 
 # Manual Apply Workflow
