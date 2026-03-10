@@ -38,9 +38,9 @@ Under the hood, Claude Code runs these commands:
 python pipeline.py                  # auto-apply (default: 1 concurrent agent)
 python pipeline.py --concurrency 4  # multiple agents
 python sync.py                      # incremental sync (~1 min)
-python sync.py --full               # full sync (~30 min)
+python sync.py --full               # full sync + company ratings (~30 min)
 python sync.py --rebuild            # reapply filters without syncing
-python scrape_companies.py          # scrape company ratings (resumes from last run)
+python scrape_companies.py          # scrape company ratings only
 python search.py                    # preview candidates
 python search.py --manual           # preview manual-apply queue
 ```

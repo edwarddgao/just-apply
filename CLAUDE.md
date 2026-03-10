@@ -56,7 +56,7 @@ Edit `filters.yaml` and run `python sync.py --rebuild` to apply. Available optio
 - Incremental: `python sync.py` (fetches jobs updated since last sync)
 - Rebuild only: `python sync.py --rebuild` (reapply filters without syncing)
 - All modes rebuild the `candidates` table
-- Company ratings: `python scrape_companies.py` (scrapes Simplify.js company pages, resumes from last run)
+- Full sync also scrapes company ratings automatically. Can also run standalone: `python scrape_companies.py`
 
 ## Tracking
 

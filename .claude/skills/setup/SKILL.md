@@ -148,17 +148,10 @@ Ask the user if they want to run the first sync now. If yes:
 python3 sync.py --full
 ```
 
-This takes ~30 minutes. Run it in the background and let the user know they can check progress.
+This takes ~30 minutes. Run it in the background and let the user know they can check progress. Full sync also scrapes company ratings automatically (used to rank candidates).
 
-After sync completes, scrape company ratings (used to rank candidates):
-
-```bash
-python3 scrape_companies.py
-```
-
-This resumes from where it left off if interrupted. Report:
+Report when done:
 - Total jobs synced
-- Companies scraped
 - Candidates matching their filters
 - Ready to run `python pipeline.py`
 
