@@ -93,7 +93,7 @@ Write the file and show the user a summary of what was generated.
 
 ### 5. Customize filters.yaml
 
-Read the current `filters.yaml`. Ask the user:
+If `filters.yaml` doesn't exist, copy `filters.example.yaml` to `filters.yaml` first. Then ask the user:
 
 - What **locations** are you targeting? (show available: USA, Canada, or others)
 - What **experience levels**? (show available: Entry Level/New Grad, Junior, Mid Level, Senior, Expert or higher, Internship)

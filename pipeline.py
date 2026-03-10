@@ -2,8 +2,8 @@
 """Automated job application orchestrator.
 
 Usage:
-    python pipeline.py                  # 4 concurrent, runs until DB exhausted
-    python pipeline.py --concurrency 8
+    python pipeline.py                  # 1 concurrent (default), runs until DB exhausted
+    python pipeline.py --concurrency 4
 """
 
 from __future__ import annotations

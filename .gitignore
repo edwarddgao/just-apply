@@ -11,4 +11,5 @@ postings_freq.png
 stream_state.json
 resume/
 agent_prompt.txt
+filters.yaml
 sync-cron.sh

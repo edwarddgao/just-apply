@@ -12,10 +12,12 @@ import httpx
 
 DB_PATH = Path(__file__).parent / "jobs.db"
 FILTERS_PATH = Path(__file__).parent / "filters.yaml"
+FILTERS_EXAMPLE_PATH = Path(__file__).parent / "filters.example.yaml"
 
 
 def load_filters() -> dict:
-    with open(FILTERS_PATH) as f:
+    path = FILTERS_PATH if FILTERS_PATH.exists() else FILTERS_EXAMPLE_PATH
+    with open(path) as f:
         return yaml.safe_load(f)
 
 
