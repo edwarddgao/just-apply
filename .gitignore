@@ -10,3 +10,4 @@ logs/
 postings_freq.png
 stream_state.json
 resume/
+agent_prompt.txt
