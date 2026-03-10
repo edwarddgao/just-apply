@@ -60,36 +60,72 @@ If not visible, tell the user:
 
 ### 4. Generate agent_prompt.txt
 
-Read `agent_prompt.example.txt` as the template. Ask the user for their information to fill it in.
+Read `agent_prompt.example.txt` as the template. Use AskUserQuestion to collect the user's information step by step. Do NOT generate answers — every value must come from the user.
 
-**Ask the user to provide their resume.** Accept either:
+#### Step 4a: Resume
+
+Ask the user to provide their resume. Accept either:
 - A file path (PDF or tex) — read it and extract the text
 - Pasted text
 
-Then ask for the remaining Known Answers that aren't covered by the resume:
-- Work authorization status (for each country they're targeting)
-- Visa/sponsorship status
-- GPA
-- Graduation date
-- Current company (or N/A)
-- Security clearance eligibility
+From the resume, extract: name, contact info, education, experience, projects, skills. Show the user what you extracted and confirm it's correct.
+
+#### Step 4b: Known Answers
+
+Ask each question individually via AskUserQuestion. These are the most common questions on job application forms — the agent needs correct answers for all of them.
+
+**Work authorization:**
+- "Are you legally authorized to work in [country]?" (Yes/No)
+- "Will you now or in the future require sponsorship?" (Yes/No)
+- If yes to sponsorship: what visa type?
+
+**Education:**
+- GPA (or N/A if they don't want to share)
+- Graduation date (month and year)
+- Degree type and major
+
+**Employment:**
+- Current company (or N/A if unemployed)
+- Years of experience (0-1, 1-3, 3-5, 5+)
+- Previously worked at any notable companies? (for "have you worked here before" questions)
+
+**Availability:**
+- Earliest start date
+- Willing to relocate? (Yes/No)
+- Willing to work in-person/hybrid? (Yes/No)
+
+**Personal:**
 - Pronouns
-- GitHub username
-- Preferred programming language(s)
-- Years of experience level
-- Any other details they want to include
+- GitHub username (if applicable)
+- LinkedIn URL (if applicable)
+- Personal website/portfolio (if applicable)
+- Preferred programming language
+- Top 3 programming languages
 
-Also ask the user what they want as their **default essay/open-ended response** — this gets pasted into every required essay field. Suggest they keep it short and generic.
+**Compliance:**
+- Security clearance? (Yes/No/Not eligible)
+- Non-compete agreement? (Yes/No)
+- SMS/text consent for recruiting? (Yes/No)
+- BrightHire/background check consent? (Yes/No)
 
-Use all of this to generate `agent_prompt.txt` based on the template. Also update:
-- The essay response with what the user provided
+**Preferences:**
+- Salary expectations strategy (recommend: "enter 0 or N/A — never give a real number")
+- "How did you hear about us?" default answer
+
+#### Step 4c: Essay response
+
+Ask: "What should the agent write for open-ended/essay questions? This gets pasted into every required essay field. Keep it short — 1-2 sentences."
+
+Suggest a generic example but let the user write their own.
+
+#### Step 4d: Generate and confirm
+
+Use all collected answers to generate `agent_prompt.txt` based on the template. Also update:
 - The `sqlite3` path in the essay section to match their project directory
-- GitHub username references
-- Any Simplify gap corrections specific to their answers
+- GitHub username references in the Simplify gaps section
+- Simplify gap corrections to match their specific answers (e.g., work auth values)
 
-Write the file and show the user a summary of what was generated.
-
-**IMPORTANT:** Tell the user to carefully review `agent_prompt.txt` before running the pipeline. This file controls everything the agent will say on their behalf — personal info, work authorization answers, and essay responses. A wrong answer could misrepresent them to employers. Open the file for them and ask them to confirm it's accurate.
+Write the file, then **open it for the user** and ask them to confirm everything is accurate before proceeding. This file controls everything the agent says on their behalf — a wrong answer could misrepresent them to employers.
 
 ### 5. Customize filters.yaml
 
