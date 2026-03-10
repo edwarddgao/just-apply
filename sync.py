@@ -413,6 +413,8 @@ if __name__ == "__main__":
         rebuild_candidates()
     elif "--full" in sys.argv:
         asyncio.run(full_sync())
+        from scrape_companies import scrape_all
+        asyncio.run(scrape_all())
         rebuild_candidates()
     else:
         asyncio.run(incremental_sync())
