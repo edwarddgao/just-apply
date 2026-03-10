@@ -12,14 +12,14 @@ pipeline.py (Python)          claude -p --chrome (per job)
 │ mark_applied()      │<──────│ Chrome MCP tools     │
 │ mark_excluded()     │       │ stream-json log      │
 └─────────────────────┘       └─────────────────────┘
-        x4 concurrent workers, each with a fixed tab ID
+        concurrent workers, each with a fixed tab ID
 ```
 
 ## Running
 
 ```bash
-python pipeline.py                  # 4 concurrent, runs until DB exhausted
-python pipeline.py --concurrency 8
+python pipeline.py                  # 1 concurrent (default), runs until DB exhausted
+python pipeline.py --concurrency 4
 ```
 
 If run from inside Claude Code, prefix with `env -u CLAUDECODE` to bypass nesting check.
@@ -30,7 +30,7 @@ If run from inside Claude Code, prefix with `env -u CLAUDECODE` to bypass nestin
 - `search.py` — `find_candidates()` (queries `candidates` table), `mark_applied()`, `mark_excluded()`, `delete_job()`
 - `sync.py` — syncs Simplify.jobs Typesense → `jobs.db`, rebuilds `candidates` table
 - `simplify.py` — Typesense API client (used by sync only)
-- `jobs.db` — SQLite mirror (864k+ jobs), `candidates` table (pre-filtered ~8.7k rows)
+- `jobs.db` — SQLite mirror (864k+ jobs), `candidates` table (pre-filtered ~7.8k rows)
 - `logs/` — per-job stream-json logs for debugging (`logs/{posting_id}.jsonl`)
 - `agent_prompt.txt` — system prompt for pipeline agents (resume, workflow, known gaps)
 
@@ -42,7 +42,7 @@ If run from inside Claude Code, prefix with `env -u CLAUDECODE` to bypass nestin
 ## Database
 
 ### `candidates` table (materialized view)
-Pre-filtered from `jobs` table by location, experience, function, title. Rebuilt by `sync.py` after each sync. Query is ~6ms vs ~700ms on raw `jobs` table.
+Pre-filtered from `jobs` table by location, experience, function, title, company. Rebuilt by `sync.py` after each sync. Query is ~6ms vs ~700ms on raw `jobs` table.
 
 ### Filters applied by `find_candidates()`:
 - Location: USA or Canada
@@ -50,7 +50,8 @@ Pre-filtered from `jobs` table by location, experience, function, title. Rebuilt
 - Experience: Entry Level/New Grad or Junior
 - Functions: SWE, Backend, Frontend, ML, Data, DevOps, etc.
 - Salary: ≤ $300k
-- Title exclusion: no senior, staff, principal, lead, director, manager
+- Title exclusion: no senior, staff, principal, lead, director, manager, phd
+- Company exclusion: no SpaceX (US citizenship required)
 - Dedup: excludes posting_ids in `applications` or `exclusions` tables
 
 ### Syncing

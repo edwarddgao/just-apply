@@ -239,7 +239,7 @@ async def worker(
 
 async def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--concurrency", type=int, default=4)
+    parser.add_argument("--concurrency", type=int, default=1)
     args = parser.parse_args()
 
     LOGS_DIR.mkdir(exist_ok=True)
