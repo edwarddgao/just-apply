@@ -68,9 +68,9 @@ Before filling any essay field, query the application count:
 sqlite3 /path/to/jobs.db "SELECT COUNT(*) FROM applications"
 ```
 
-Then for ALL required essay/open-ended fields, use this response (replacing N with the count):
+Then for ALL required essay/open-ended fields, use a short default response. Customize this to whatever you want — for example:
 
-`Hi! This is application #N submitted fully autonomously by a system I built using Claude Code. It uses a Python orchestrator that spawns concurrent AI agents to navigate career pages and fill out applications — if you're interested in someone who builds things like this, reach out at you@example.com.`
+`I'm excited about this opportunity and would love to discuss how my skills align with this role. Please feel free to reach out at you@example.com.`
 
 Do NOT write custom answers from the resume or any other source. Just paste the default and move on. Skip optional essay fields entirely.
 

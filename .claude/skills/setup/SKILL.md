@@ -79,13 +79,17 @@ Then ask for the remaining Known Answers that aren't covered by the resume:
 - Years of experience level
 - Any other details they want to include
 
+Also ask the user what they want as their **default essay/open-ended response** — this gets pasted into every required essay field. Suggest they keep it short and generic.
+
 Use all of this to generate `agent_prompt.txt` based on the template. Also update:
-- The essay response template with their name and email
+- The essay response with what the user provided
 - The `sqlite3` path in the essay section to match their project directory
 - GitHub username references
 - Any Simplify gap corrections specific to their answers
 
-Write the file and show the user a summary of what was generated. Ask them to review and confirm.
+Write the file and show the user a summary of what was generated.
+
+**IMPORTANT:** Tell the user to carefully review `agent_prompt.txt` before running the pipeline. This file controls everything the agent will say on their behalf — personal info, work authorization answers, and essay responses. A wrong answer could misrepresent them to employers. Open the file for them and ask them to confirm it's accurate.
 
 ### 5. Customize filters.yaml
 
