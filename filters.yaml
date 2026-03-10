@@ -1,0 +1,56 @@
+# Candidate filters — edit and run `python sync.py --rebuild` to apply
+
+locations:
+  - USA
+  - Canada
+
+# Options: Full-Time, Part-Time, Internship, Contract
+type: Full-Time
+
+# Options: Entry Level/New Grad, Junior, Mid Level, Senior, Expert or higher, Internship
+experience_levels:
+  - Entry Level/New Grad
+  - Junior
+
+# Also match these patterns in the title (OR'd with experience_levels)
+title_experience_patterns:
+  - new grad
+  - new college
+  - entry level
+  - university grad
+
+# Options: Software Engineering, Backend Engineering, Frontend Engineering,
+#   Full-Stack Engineering, Mobile Engineering, Game Engineering, Embedded Engineering,
+#   Machine Learning, AI/ML/GenAI Engineering, Data Science, Data Engineering,
+#   Data & Analytics, DevOps & Infrastructure, Cloud Engineering, Site Reliability Engineering,
+#   Platform Engineering, IT & Security, Cybersecurity, Security Engineering,
+#   QA & Testing, Emerging Technology, Robotics & Autonomous Systems,
+#   Computer Vision, Deep Learning, NLP, Quantum Computing, ...
+#   (run `python -c "import sqlite3,json; [print(f) for f in sorted({f for r in sqlite3.connect('jobs.db').execute('SELECT functions FROM jobs') for f in json.loads(r[0] or '[]')})]"` for full list)
+functions:
+  - Software Engineering
+  - Backend Engineering
+  - Frontend Engineering
+  - Machine Learning
+  - Data & Analytics
+  - IT & Security
+  - DevOps & Infrastructure
+  - Data Engineering
+  - Mobile Development
+  - Emerging Technology
+
+max_salary: 300000
+
+# Exclude jobs whose title contains any of these (case-insensitive)
+title_exclusions:
+  - senior
+  - staff
+  - principal
+  - "lead "
+  - director
+  - manager
+  - phd
+
+# Exclude jobs from these companies (case-insensitive)
+company_exclusions:
+  - spacex  # US citizenship required

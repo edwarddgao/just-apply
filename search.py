@@ -7,13 +7,21 @@ import json
 import sqlite3
 from pathlib import Path
 
+import yaml
 import httpx
 
 DB_PATH = Path(__file__).parent / "jobs.db"
+FILTERS_PATH = Path(__file__).parent / "filters.yaml"
 
-# Shared with rebuild_candidates() in sync.py
-TITLE_EXCLUSIONS = ["senior", "staff", "principal", "lead ", "director", "manager", "phd"]
-COMPANY_EXCLUSIONS = ["spacex"]  # US citizenship required
+
+def load_filters() -> dict:
+    with open(FILTERS_PATH) as f:
+        return yaml.safe_load(f)
+
+
+FILTERS = load_filters()
+TITLE_EXCLUSIONS = FILTERS.get("title_exclusions", [])
+COMPANY_EXCLUSIONS = FILTERS.get("company_exclusions", [])
 
 def find_candidates(limit: int = 100) -> list[dict]:
     """Return unapplied jobs ranked by company rating DESC.

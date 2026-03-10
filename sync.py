@@ -11,7 +11,7 @@ from pathlib import Path
 import httpx
 
 from simplify import TYPESENSE_API_KEY, TYPESENSE_COLLECTION, TYPESENSE_SEARCH
-from search import TITLE_EXCLUSIONS, COMPANY_EXCLUSIONS
+from search import FILTERS, TITLE_EXCLUSIONS, COMPANY_EXCLUSIONS
 
 DB_PATH = Path(__file__).parent / "jobs.db"
 BATCH_SIZE = 250
@@ -306,8 +306,18 @@ async def incremental_sync() -> None:
 def rebuild_candidates() -> None:
     """Rebuild the materialized candidates table used by find_candidates()."""
     conn = sqlite3.connect(DB_PATH)
+
+    # Build WHERE clauses from filters.yaml
+    location_clauses = " OR ".join(f"j.locations LIKE '%{loc}%'" for loc in FILTERS["locations"])
+    exp_clauses = " OR ".join(f"j.experience_level LIKE '%{e}%'" for e in FILTERS["experience_levels"])
+    title_exp_clauses = " OR ".join(f"LOWER(j.title) LIKE '%{p}%'" for p in FILTERS.get("title_experience_patterns", []))
+    if title_exp_clauses:
+        exp_clauses = f"{exp_clauses} OR {title_exp_clauses}"
+    func_clauses = " OR ".join(f"j.functions LIKE '%{f}%'" for f in FILTERS["functions"])
+    max_salary = FILTERS.get("max_salary", 300000)
     title_filter = " ".join(f"AND LOWER(j.title) NOT LIKE '%{t}%'" for t in TITLE_EXCLUSIONS)
     company_filter = " ".join(f"AND LOWER(j.company_name) NOT LIKE '%{c}%'" for c in COMPANY_EXCLUSIONS)
+
     conn.execute("DROP TABLE IF EXISTS candidates_new")
     conn.execute(f"""
         CREATE TABLE candidates_new AS
@@ -319,25 +329,11 @@ def rebuild_candidates() -> None:
                COALESCE(co.rating_differentiation, 0) as rating_differentiation
         FROM jobs j
         LEFT JOIN companies co ON j.company_id = co.company_id
-        WHERE (j.locations LIKE '%USA%' OR j.locations LIKE '%Canada%')
-          AND j.type = 'Full-Time'
-          AND (j.experience_level LIKE '%Entry Level/New Grad%'
-               OR j.experience_level LIKE '%Junior%'
-               OR LOWER(j.title) LIKE '%new grad%'
-               OR LOWER(j.title) LIKE '%new college%'
-               OR LOWER(j.title) LIKE '%entry level%'
-               OR LOWER(j.title) LIKE '%university grad%')
-          AND (j.functions LIKE '%Software Engineering%'
-               OR j.functions LIKE '%Backend Engineering%'
-               OR j.functions LIKE '%Frontend Engineering%'
-               OR j.functions LIKE '%Machine Learning%'
-               OR j.functions LIKE '%Data & Analytics%'
-               OR j.functions LIKE '%IT & Security%'
-               OR j.functions LIKE '%DevOps & Infrastructure%'
-               OR j.functions LIKE '%Data Engineering%'
-               OR j.functions LIKE '%Mobile Development%'
-               OR j.functions LIKE '%Emerging Technology%')
-          AND (j.max_salary IS NULL OR j.max_salary <= 300000)
+        WHERE ({location_clauses})
+          AND j.type = '{FILTERS["type"]}'
+          AND ({exp_clauses})
+          AND ({func_clauses})
+          AND (j.max_salary IS NULL OR j.max_salary <= {max_salary})
           AND j.salary_period <> '1'
           {title_filter}
           {company_filter}
@@ -413,9 +409,12 @@ async def check_liveness() -> None:
 
 if __name__ == "__main__":
     import sys
-    if "--full" in sys.argv:
+    if "--rebuild" in sys.argv:
+        rebuild_candidates()
+    elif "--full" in sys.argv:
         asyncio.run(full_sync())
+        rebuild_candidates()
     else:
         asyncio.run(incremental_sync())
         asyncio.run(check_liveness())
-    rebuild_candidates()
+        rebuild_candidates()

@@ -33,6 +33,7 @@ If run from inside Claude Code, prefix with `env -u CLAUDECODE` to bypass nestin
 - `jobs.db` — SQLite mirror (864k+ jobs), `candidates` table (pre-filtered ~7.8k rows)
 - `logs/` — per-job stream-json logs for debugging (`logs/{posting_id}.jsonl`)
 - `agent_prompt.txt` — system prompt for pipeline agents (resume, workflow, known gaps)
+- `filters.yaml` — candidate filters (location, experience, functions, exclusions)
 
 ## Candidate
 
@@ -44,20 +45,15 @@ If run from inside Claude Code, prefix with `env -u CLAUDECODE` to bypass nestin
 ### `candidates` table (materialized view)
 Pre-filtered from `jobs` table by location, experience, function, title, company. Rebuilt by `sync.py` after each sync. Query is ~6ms vs ~700ms on raw `jobs` table.
 
-### Filters applied by `find_candidates()`:
-- Location: USA or Canada
-- Type: Full-Time
-- Experience: Entry Level/New Grad or Junior
-- Functions: SWE, Backend, Frontend, ML, Data, DevOps, etc.
-- Salary: ≤ $300k
-- Title exclusion: no senior, staff, principal, lead, director, manager, phd
-- Company exclusion: no SpaceX (US citizenship required)
-- Dedup: excludes posting_ids in `applications` or `exclusions` tables
+### Filters (configured in `filters.yaml`)
+Edit `filters.yaml` and run `python sync.py --rebuild` to apply. Available options are documented as comments in the file.
+- Dedup: `find_candidates()` excludes posting_ids already in `applications` or `exclusions` tables
 
 ### Syncing
 - Full: `python sync.py --full` (~30 min)
 - Incremental: `python sync.py` (fetches jobs updated since last sync)
-- Both rebuild the `candidates` table at the end
+- Rebuild only: `python sync.py --rebuild` (reapply filters without syncing)
+- All modes rebuild the `candidates` table
 
 ## Tracking
 
