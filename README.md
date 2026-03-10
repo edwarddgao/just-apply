@@ -40,6 +40,7 @@ python pipeline.py --concurrency 4  # multiple agents
 python sync.py                      # incremental sync (~1 min)
 python sync.py --full               # full sync (~30 min)
 python sync.py --rebuild            # reapply filters without syncing
+python scrape_companies.py          # scrape company ratings (resumes from last run)
 python search.py                    # preview candidates
 python search.py --manual           # preview manual-apply queue
 ```
