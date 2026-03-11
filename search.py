@@ -80,7 +80,7 @@ async def resolve_urls(candidates: list[dict], concurrency: int = 5) -> list[dic
                     resp = await client.get(url, follow_redirects=True, timeout=15.0)
                     final = str(resp.url)
                     if "simplify.jobs" in final:
-                        return None
+                        return {**c, "_no_external_url": True}
                     # Detect dead pages before spawning an agent
                     if resp.status_code == 404:
                         return {**c, "url": final, "_dead": "HTTP 404"}

@@ -285,7 +285,7 @@ async def incremental_sync() -> None:
 
             rows = []
             for doc in docs:
-                if doc.get("updated_date", 0) <= last_updated:
+                if doc.get("updated_date", 0) < last_updated:
                     done = True
                     break
                 rows.append(_row_from_doc(doc))
@@ -308,15 +308,18 @@ def rebuild_candidates() -> None:
     conn = sqlite3.connect(DB_PATH)
 
     # Build WHERE clauses from filters.yaml
-    location_clauses = " OR ".join(f"j.locations LIKE '%{loc}%'" for loc in FILTERS["locations"])
-    exp_clauses = " OR ".join(f"j.experience_level LIKE '%{e}%'" for e in FILTERS["experience_levels"])
-    title_exp_clauses = " OR ".join(f"LOWER(j.title) LIKE '%{p}%'" for p in FILTERS.get("title_experience_patterns", []))
+    def esc(v: str) -> str:
+        return v.replace("'", "''")
+
+    location_clauses = " OR ".join(f"j.locations LIKE '%{esc(loc)}%'" for loc in FILTERS["locations"])
+    exp_clauses = " OR ".join(f"j.experience_level LIKE '%{esc(e)}%'" for e in FILTERS["experience_levels"])
+    title_exp_clauses = " OR ".join(f"LOWER(j.title) LIKE '%{esc(p)}%'" for p in FILTERS.get("title_experience_patterns", []))
     if title_exp_clauses:
         exp_clauses = f"{exp_clauses} OR {title_exp_clauses}"
-    func_clauses = " OR ".join(f"j.functions LIKE '%{f}%'" for f in FILTERS["functions"])
-    max_salary = FILTERS.get("max_salary", 300000)
-    title_filter = " ".join(f"AND LOWER(j.title) NOT LIKE '%{t}%'" for t in TITLE_EXCLUSIONS)
-    company_filter = " ".join(f"AND LOWER(j.company_name) NOT LIKE '%{c}%'" for c in COMPANY_EXCLUSIONS)
+    func_clauses = " OR ".join(f"j.functions LIKE '%{esc(f)}%'" for f in FILTERS["functions"])
+    max_salary = int(FILTERS.get("max_salary", 300000))
+    title_filter = " ".join(f"AND LOWER(j.title) NOT LIKE '%{esc(t)}%'" for t in TITLE_EXCLUSIONS)
+    company_filter = " ".join(f"AND LOWER(j.company_name) NOT LIKE '%{esc(c)}%'" for c in COMPANY_EXCLUSIONS)
 
     conn.execute("DROP TABLE IF EXISTS candidates_new")
     conn.execute(f"""
@@ -330,7 +333,7 @@ def rebuild_candidates() -> None:
         FROM jobs j
         LEFT JOIN companies co ON j.company_id = co.company_id
         WHERE ({location_clauses})
-          AND j.type = '{FILTERS["type"]}'
+          AND j.type = '{esc(FILTERS["type"])}'
           AND ({exp_clauses})
           AND ({func_clauses})
           AND (j.max_salary IS NULL OR j.max_salary <= {max_salary})

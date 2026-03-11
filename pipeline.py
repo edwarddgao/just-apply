@@ -209,14 +209,18 @@ async def worker(
 
         cost[0] += job_cost
 
-        if status in ("submitted", "already_applied"):
-            mark_applied(job["posting_id"])
-            results[status] = results.get(status, 0) + 1
-        elif status in ("blocked", "timeout"):
-            mark_excluded(job["posting_id"], reason, job["company"], job["title"], job["url"])
-            results["excluded"] += 1
-        elif status == "error":
-            recent_errors.append(time.time())
+        try:
+            if status in ("submitted", "already_applied"):
+                mark_applied(job["posting_id"])
+                results[status] = results.get(status, 0) + 1
+            elif status in ("blocked", "timeout"):
+                mark_excluded(job["posting_id"], reason, job["company"], job["title"], job["url"])
+                results["excluded"] += 1
+            elif status == "error":
+                recent_errors.append(time.time())
+                results["error"] += 1
+        except Exception as e:
+            log(f"  [{worker_id}] DB error: {e}")
             results["error"] += 1
 
         # 3+ errors within 60s = Chrome likely crashed
@@ -277,11 +281,17 @@ async def main() -> None:
             resolved_ids = {r["posting_id"] for r in resolved_batch}
             for c in candidates:
                 if c["posting_id"] not in resolved_ids:
+                    # Network failure — exclude but don't delete (may be transient)
                     mark_excluded(c["posting_id"], "URL resolution failed",
                                   c["company"], c["title"], "")
                     results["excluded"] += 1
 
             for resolved in resolved_batch:
+                if "_no_external_url" in resolved:
+                    delete_job(resolved["posting_id"])
+                    results["deleted"] += 1
+                    log(f"  x No external URL: {resolved['company']} - {resolved['title']}")
+                    continue
                 if "_dead" in resolved:
                     delete_job(resolved["posting_id"])
                     results["deleted"] += 1
